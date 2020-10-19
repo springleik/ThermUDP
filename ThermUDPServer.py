@@ -50,11 +50,12 @@ try:
 	i2cBus = smbus.SMBus(bus = 1)
 	cfg = i2cBus.read_byte_data(ds1621Addr, accessCfg)
 	if 0 == (cfg & 0x01):
-		cfg |= 0x01
+		cfg |= 0x01	# set one-shot bit
 		print ('Writing config register: {0}'.format(hex(cfg)))
 		i2cBus.write_byte_data(ds1621Addr, accessCfg, cfg)
 		time.sleep(0.01)
 	print ('DS1621 intialized at addr: {0}'.format(hex(ds1621Addr)))
+	
 except (IOError, OSError, ImportError) as e:
 	i2cBus = None
 	print ('Failed to initialize hardware: {0}'.format(e))
@@ -78,6 +79,7 @@ def getDataPoint():
 		rslt = i2cBus.read_byte_data(ds1621Addr, accessCfg)
 		if rslt & 0x80: done = True
 		timeout -= 1
+		
 	if not timeout:
 		error = {'error':'Conversion timed out.'}
 		print (error)
@@ -93,7 +95,9 @@ def getDataPoint():
 	# read high (1/16-deg) resolution
 	count = i2cBus.read_byte_data(ds1621Addr, readCount)
 	slope = i2cBus.read_byte_data(ds1621Addr, readSlope)
-	hiRes = (therm & 0xff) - 0.25 + (slope - count) / slope
+	temp = therm & 0xff
+	if temp > 127: temp -= 256
+	hiRes = temp - 0.25 + (slope - count) / slope
 
 	# build data point structure
 	now = datetime.datetime.now()
