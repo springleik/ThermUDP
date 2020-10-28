@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import sys, string, socket, datetime
-import time, json, socketserver
+import time, json, asyncio
 
 # ----------------------------------------------------------
 # command line arguments
-print ('ThermUDPServer.py reads temperature from Maxim/Dallas')
-print ('DS1621 thermometer connected by I2C to Rasp-Pi computer.')
-print ('M. Williamsen, 10/20/2020, https://github.com/springleik')
-print ('Usage: python3 ThermUDPServer.py [arg names and values]')
+print ('ThermAsyncio.py reads temperature from Maxim/Dallas DS1621')
+print ('thermometer connected by I2C to Raspberry Pi computer.')
+print ('M. Williamsen, 10/26/2020, https://github.com/springleik')
+print ('Usage: python3 ThermAsyncio.py [arg names and values]')
 print ('  arg name | arg value')
 print ('  ---------|----------')
 print ('  -port    | socket port number   (default is 43210)')
@@ -24,7 +24,7 @@ args = iter(sys.argv)
 print ('Running script: "{0}"\n  in Python: {1}'.format(next(args), sys.version))
 for arg in args:
 	if '-port' == arg:
-		thePort = next(args, thePort)
+		thePort = int(next(args, thePort), 0)
 	elif '-host' == arg:
 		theHost = next(args, theHost)
 	elif '-addr' == arg:
@@ -55,11 +55,11 @@ try:
 		i2cBus.write_byte_data(ds1621Addr, accessCfg, cfg)
 		time.sleep(0.01)
 	print ('DS1621 intialized at addr: {0}'.format(hex(ds1621Addr)))
-	
+
 except (IOError, OSError, ImportError) as e:
 	i2cBus = None
 	print ('Failed to initialize hardware: {0}'.format(e))
-	print ('  Running in simulation mode.')
+	print ('   Running in simulation mode.')
 
 # function to read and report temperature
 def getDataPoint():
@@ -71,9 +71,9 @@ def getDataPoint():
 	# start a temperature conversion
 	i2cBus.write_byte_data(ds1621Addr, startConv, 0)
 
-	# wait up to 1 sec. for completion
+	# wait up to 1.5 sec. for completion
 	done = False
-	timeout = 10
+	timeout = 15
 	while (not done) and (timeout > 0):
 		time.sleep(0.1)
 		rslt = i2cBus.read_byte_data(ds1621Addr, accessCfg)
@@ -113,16 +113,30 @@ def getDataPoint():
 
 # ----------------------------------------------------------
 # implement UDP socket server
-class UDPHandler(socketserver.BaseRequestHandler):
-	def handle(self):
-		data = self.request[0].strip()
-		socket = self.request[1]
-		print ('{0} wrote: {1}'.format(self.client_address[0], data))
-		socket.sendto((json.dumps(getDataPoint()) + '\n').encode('utf-8'),
-			self.client_address)
+# https://docs.python.org/3/library/asyncio-protocol.html#udp-echo-server
+class myProtocol:
+	def connection_made(self, transport):
+		self.transport = transport
+
+	def datagram_received(self, data, addr):
+		if data:
+			msg = data.decode().strip()
+			if len(msg):
+				print('msg: {0}'.format(msg))
+		self.transport.sendto((json.dumps(getDataPoint()) + '\n').encode('utf-8'), addr)
 		
-# start server
-print ('Starting server on port: {0}, host: {1}'.format(thePort, theHost))
-with socketserver.UDPServer((theHost, thePort), UDPHandler) as server:
-		server.serve_forever()
+	def connection_lost(self, exc):
+		pass
 		
+# define main loop
+async def main():
+	print('Main loop started.')
+	theLoop = asyncio.get_running_loop()
+	transport, protocol = await theLoop.create_datagram_endpoint(lambda: myProtocol(), local_addr=(theHost, thePort))
+	while True: await asyncio.sleep(1)
+
+# run main loop
+try:
+	asyncio.run(main())
+except (KeyboardInterrupt):
+	print('  User exit request.')
