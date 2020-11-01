@@ -9,4 +9,4 @@ The UDP temperature server posted here uses the [smbus](https://pypi.org/project
 
 ![RasPi Screen Capture](RasPiScreen.png)
 
-There are various ways for the UDP server to start itself at boot time.  My favorite is [daemontools](https://cr.yp.to/daemontools.html).
+There are various ways for the UDP server to start itself at boot time.  My favorite is [daemontools](https://cr.yp.to/daemontools.html).  Or you can just start it manually at the command line.  Once it's running, it listens for inbound UDP packets on the assigned port.  The content, if any, is ignored.  A one-shot conversion is initiated, and the result sent back to the client in engineering units.  This has the advantage that the DS1621 is idle between readings and can return to ambient temperature.  And the disadvantage that frequent readings, or readings from multiple clients, can increase duty cycle enough to increase measured temperature by some fraction of a degree.
